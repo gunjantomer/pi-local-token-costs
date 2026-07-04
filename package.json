@@ -30,6 +30,7 @@
   "pi": {
     "extensions": [
       "./extensions"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/gunjantomer/pi-local-token-costs/main/screenshot.png"
   }
 }
