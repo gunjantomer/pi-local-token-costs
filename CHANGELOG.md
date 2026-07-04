@@ -1,5 +1,18 @@
 # Changelog
 
+### 2026-07-04 — Removed system-specific paths from public package
+
+**Problem**: Example paths in docs and code comments referenced a specific Windows drive (`A:\lmstudio-models\`) and local repo path (`A:\code-backup\`), which are not relevant for other users.
+
+**Fixes applied:**
+
+1. **Generalized example paths** in `token-costs.ts` and `docs/model-matching.md` to use cross-platform `/path/to/` instead of Windows-specific `A:\` paths
+2. **Removed local repo path** from `docs/troubleshooting.md` — now references `npm:pi-local-token-costs` only
+
+### 2026-07-04 — Restructured documentation
+
+Moved changelog entries to a separate `CHANGELOG.md` file. Added `docs/` folder with dedicated pages for configuration, model matching, architecture, and troubleshooting.
+
 ### 2026-07-04 — Added dot-preserved fallback entries for Qwen3.6 & Qwen3.5; improved status bar labels
 
 **Problem**: `Qwen3.6-27B` normalized to `qwen3.6-27b` (dot preserved) but the fallback DB only had `qwen3-6-27b` (dashes). The stripping pipeline couldn't bridge the dot/dash gap, so the model fell through to the generic `qwen3` family key (`$0.09/$1.1` per M) instead of the correct `qwen3-6-27b` price (`$0.285/$2.4` per M). With >1M output tokens, this showed `$0.39` instead of the correct ~`$2.66`.

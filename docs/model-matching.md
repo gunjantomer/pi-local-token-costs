@@ -29,7 +29,7 @@ Example transformations:
 | Raw ID | Normalized | Resolved To |
 |--------|-----------|-------------|
 | `Qwen/Qwen3.6-35B-A3B-Instruct` | `qwen3.6-35b-a3b-instruct` | Direct fallback → $0.14/M input |
-| `A:\lmstudio-models\...\Qwen3.6-35B-A3B-Q4_K_M.gguf` | `qwen3.6-35b-a3b-q4-k-m` | Dot-preserved fallback → $0.14/M input |
+| `/path/to/Qwen3.6-35B-A3B-Q4_K_M.gguf` | `qwen3.6-35b-a3b-q4-k-m` | Dot-preserved fallback → $0.14/M input |
 | `ollama/qwen2.5-coder:32b` | `qwen2.5-coder:32b` | Alias rule → Qwen2.5 Coder ($0.66/$1.00 per M tokens) |
 | `gemma4-26B-A3B-QAT` | `gemma4-26b-a3b-qat` | Stripping (-a3b-qat) → family match → `gemma4` |
 

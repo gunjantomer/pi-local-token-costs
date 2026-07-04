@@ -35,7 +35,7 @@ Verify the extension is enabled:
 pi config
 ```
 
-Look for `A:\code-backup\pi-local-token-costs` (or `npm:pi-local-token-costs`) with `token-costs.ts` checked `[x]`.
+Look for `npm:pi-local-token-costs` with `token-costs.ts` checked `[x]`.
 
 ## Local model shows $0 cost
 

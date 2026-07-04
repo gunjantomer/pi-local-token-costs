@@ -683,7 +683,7 @@ function normalizeModelId(modelId: string): string {
 	let id = modelId.trim();
 
 	// Strip Windows/Linux file paths (LM Studio, Ollama local serving, etc.)
-	// e.g., "A:\lmstudio-models\qwen2.5-coder-32b.Q4_K_M.gguf" → "qwen2.5-coder-32b"
+	// e.g., "/path/to/qwen2.5-coder-32b.Q4_K_M.gguf" → "qwen2.5-coder-32b"
 	id = id.replace(/.*[/\\]/g, ""); // Remove directory prefix + trailing slash
 	id = id
 		.replace(/\.gguf$/i, "")
