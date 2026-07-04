@@ -1,5 +1,27 @@
 # Changelog
 
+### 2026-07-04 — 1.0.3: Dead code cleanup and code quality improvements
+
+**Changes:**
+
+1. **Removed 4 unused functions** that were leftover from refactoring:
+   - `extractBaseModel` — never called
+   - `stripParameterSuffix` — never called
+   - `extractParamCounts` — never called
+   - `lookupPrice` — just wrapped `resolveModel`
+
+2. **Removed orphaned JSDoc comments** for the deleted functions
+
+3. **Removed unused `COMMON_SUFFIXES` constant**
+
+4. **Removed duplicate `qwen2.5-coder`** from `LOCAL_MODEL_DEFAULTS` (already in `FALLBACK_PRICES` with real pricing; local entry was unreachable)
+
+5. **Extracted `keyMatches()` helper** — replaced 3 copy-pasted call sites for the repeated fallback matching logic
+
+6. **Split long template literals** to stay under 150-char line limit
+
+**Result:** Line count reduced from 1659 → 1604 (net -55 lines)
+
 ### 2026-07-04 — Removed system-specific paths from public package
 
 **Problem**: Example paths in docs and code comments referenced a specific Windows drive (`A:\lmstudio-models\`) and local repo path (`A:\code-backup\`), which are not relevant for other users.
