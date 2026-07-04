@@ -41,7 +41,7 @@ The extension is auto-discovered by pi when installed as a pi package:
 pi install npm:pi-local-token-costs
 
 # Install from git
-pi install git:github.com/Greys-Coding/pi-local-token-costs@v1.0.0
+pi install git:github.com/gunjantomer/pi-local-token-costs@v1.0.0
 ```
 
 No additional configuration needed — just restart pi or run `/reload` to activate.

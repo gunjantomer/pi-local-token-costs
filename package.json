@@ -8,12 +8,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Greys-Coding/pi-local-token-costs.git"
+    "url": "git+https://github.com/gunjantomer/pi-local-token-costs.git"
   },
   "bugs": {
-    "url": "https://github.com/Greys-Coding/pi-local-token-costs/issues"
+    "url": "https://github.com/gunjantomer/pi-local-token-costs/issues"
   },
-  "homepage": "https://github.com/Greys-Coding/pi-local-token-costs#readme",
+  "homepage": "https://github.com/gunjantomer/pi-local-token-costs#readme",
   "files": [
     "extensions/",
     "docs/",
