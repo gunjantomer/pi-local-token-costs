@@ -1,11 +1,23 @@
 {
   "name": "pi-local-token-costs",
   "version": "1.0.0",
-  "description": "Token cost tracking extension for Pi Agent",
+  "description": "Token cost tracking extension for Pi Agent — live footer display with cheapest OpenRouter pricing, cross-session history, and local model matching",
   "keywords": ["pi-package"],
   "main": "extensions/token-costs.ts",
   "types": "extensions/token-costs.ts",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Greys-Coding/pi-local-token-costs.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Greys-Coding/pi-local-token-costs/issues"
+  },
+  "homepage": "https://github.com/Greys-Coding/pi-local-token-costs#readme",
+  "files": [
+    "extensions/",
+    "README.md"
+  ],
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*",
