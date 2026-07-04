@@ -16,7 +16,9 @@
   "homepage": "https://github.com/Greys-Coding/pi-local-token-costs#readme",
   "files": [
     "extensions/",
-    "README.md"
+    "docs/",
+    "README.md",
+    "CHANGELOG.md"
   ],
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
