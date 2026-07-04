@@ -1,0 +1,17 @@
+{
+  "name": "pi-local-token-costs",
+  "version": "1.0.0",
+  "description": "Token cost tracking extension for Pi Agent",
+  "keywords": ["pi-package"],
+  "main": "extensions/token-costs.ts",
+  "types": "extensions/token-costs.ts",
+  "license": "MIT",
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": ["./extensions"]
+  }
+}
