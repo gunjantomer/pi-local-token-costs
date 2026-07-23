@@ -72,11 +72,16 @@ resolveModel(modelId)
 
 ## State Persistence
 
-Token history is stored via `pi.appendEntry("token-cost-history", history)`, which persists it in the session file. This means:
+Token history is stored via `pi.appendEntry("token-cost-entry", entry)`, which persists **only the delta** (single new entry) in the session file after each turn. This avoids unbounded growth of the session log that previously caused `JSON.stringify` "Invalid string length" errors on long sessions.
+
+On session start, `loadHistory()` reconstructs the full history by scanning all `token-cost-entry` entries from the session log. Backward compatibility is maintained for old `token-cost-history` entries.
+
+This means:
 
 - History survives **session restarts** (reload, crash)
 - History survives **session forks/clones** (correct state for each branch point)
 - History from **previous sessions** is loaded on `session_start` by scanning all entries
+- Session log stays small — each entry is ~200 bytes instead of growing unboundedly
 
 ## Refresh Strategy
 

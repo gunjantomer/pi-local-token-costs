@@ -1118,6 +1118,12 @@ let _refreshInterval: ReturnType<typeof setInterval> | null = null;
 function loadHistory(ctx: ExtensionContext): void {
   history = { entries: [], version: 1 };
   for (const entry of ctx.sessionManager.getEntries()) {
+    // Read delta entries (each is a single CostEntry)
+    if (entry.type === 'custom' && entry.customType === 'token-cost-entry') {
+      const data = entry.data as CostEntry | undefined;
+      if (data) history.entries.push(data);
+    }
+    // Backward compatibility: also read old format (full history objects)
     if (entry.type === 'custom' && entry.customType === 'token-cost-history') {
       const data = entry.data as CostHistory | undefined;
       if (data?.entries) history.entries.push(...data.entries);
@@ -1281,7 +1287,7 @@ export default async function (pi: ExtensionAPI) {
         ? providerTotal
         : costInput + costOutput;
 
-    history.entries.push({
+    const entry: CostEntry = {
       timestamp: Date.now(),
       modelId,
       inputTokens,
@@ -1291,7 +1297,8 @@ export default async function (pi: ExtensionAPI) {
       costCacheRead,
       costCacheWrite,
       costTotal,
-    });
+    };
+    history.entries.push(entry);
     sessionInputTokens += inputTokens;
     sessionOutputTokens += outputTokens;
     sessionCostTotal += costTotal;
@@ -1299,7 +1306,10 @@ export default async function (pi: ExtensionAPI) {
     // Update powerline status immediately after recording new token data
     updateStatus(ctx);
 
-    pi.appendEntry('token-cost-history', history);
+    // Append only the delta entry to avoid unbounded growth of session log.
+    // Previously appended the entire history object every turn, causing
+    // JSON.stringify to fail with "Invalid string length" on long sessions.
+    pi.appendEntry('token-cost-entry', entry);
   });
 
   // ─── Commands ──────────────────────────────────────────────────────
@@ -1588,7 +1598,7 @@ export default async function (pi: ExtensionAPI) {
       sessionInputTokens += params.inputTokens;
       sessionOutputTokens += params.outputTokens;
       sessionCostTotal += entry.costTotal;
-      pi.appendEntry('token-cost-history', history);
+      pi.appendEntry('token-cost-entry', entry);
 
       return {
         content: [

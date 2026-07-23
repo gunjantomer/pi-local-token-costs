@@ -1,5 +1,16 @@
 # Changelog
 
+### 2026-07-23 — 1.0.4: Fix "Invalid string length" error on long sessions
+
+**Problem:** On long sessions, `pi.appendEntry("token-cost-history", history)` appended the entire growing `history.entries` array every turn. This caused the session log to grow unboundedly, eventually exceeding the JavaScript string length limit during `JSON.stringify` in `SessionManager._persist`, throwing "Invalid string length" on every turn.
+
+**Fix:** Changed to append only the **delta** (`pi.appendEntry("token-cost-entry", entry)`) — each entry is ~200 bytes instead of the entire history object. `loadHistory()` now reads `token-cost-entry` entries and reconstructs the full history. Backward compatibility is maintained for old `token-cost-history` entries.
+
+**Changes:**
+- `extensions/token-costs.ts` — Append only delta entry in `message_end` and `record-tool-cost` handlers
+- `extensions/token-costs.ts` — `loadHistory()` reads `token-cost-entry` entries (with backward compat for old format)
+- `docs/architecture.md` — Updated State Persistence section
+
 ### 2026-07-04 — 1.0.3: Dead code cleanup and code quality improvements
 
 **Changes:**
