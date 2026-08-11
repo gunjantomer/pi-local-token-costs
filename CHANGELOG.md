@@ -1,5 +1,26 @@
 # Changelog
 
+### Upcoming — Token usage contribution matrix and cross-session file persistence
+
+**New feature:** `/token-matrix` command generates a GitHub-style contribution grid showing daily token usage and cost, viewable in your default browser.
+
+**Features:**
+
+- 7-row (days) × N-column (weeks) heatmap with per-model color gradients
+- Toggle between cost ($) and token count views
+- Hover tooltips with per-model breakdown (cost, input/output tokens)
+- Dynamic model legend with color swatches
+- Configurable date range via `--weeks N` (default: 12) or `--months N`
+
+**Cross-session file persistence:** Token history is now saved to `~/.pi/agent/token-cost-history.json` so data survives across Pi sessions. Previously, `sessionManager.getEntries()` only returned entries from the current session, so history was lost on restart.
+
+**Changes:**
+
+- `extensions/matrix-html.ts` — new module: `generateMatrixHtml()` with week-based grid, per-model HSL colors, and client-side tooltips
+- `extensions/token-costs.ts` — `/token-matrix` command registration, file-based persistence, cross-platform browser open
+- `README.md` — documented new command and feature
+- `docs/token-matrix.md` — new dedicated documentation page
+
 ### 2026-07-23 — 1.0.4: Fix "Invalid string length" error on long sessions
 
 **Problem:** On long sessions, `pi.appendEntry("token-cost-history", history)` appended the entire growing `history.entries` array every turn. This caused the session log to grow unboundedly, eventually exceeding the JavaScript string length limit during `JSON.stringify` in `SessionManager._persist`, throwing "Invalid string length" on every turn.
@@ -7,6 +28,7 @@
 **Fix:** Changed to append only the **delta** (`pi.appendEntry("token-cost-entry", entry)`) — each entry is ~200 bytes instead of the entire history object. `loadHistory()` now reads `token-cost-entry` entries and reconstructs the full history. Backward compatibility is maintained for old `token-cost-history` entries.
 
 **Changes:**
+
 - `extensions/token-costs.ts` — Append only delta entry in `message_end` and `record-tool-cost` handlers
 - `extensions/token-costs.ts` — `loadHistory()` reads `token-cost-entry` entries (with backward compat for old format)
 - `docs/architecture.md` — Updated State Persistence section
