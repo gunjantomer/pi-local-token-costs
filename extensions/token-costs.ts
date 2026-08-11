@@ -25,9 +25,12 @@ import type {
   ExtensionContext,
 } from '@earendil-works/pi-coding-agent';
 
+import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { Type } from 'typebox';
+
+import { generateMatrixHtml, type DayData } from './matrix-html';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -333,6 +336,45 @@ function getConfigPath(): string {
     'agent',
     'token-costs.json',
   );
+}
+
+// ─── Cross-Session History File ─────────────────────────────────────────────
+
+/** Persisted history file that survives across sessions.
+ *  Stored at ~/.pi/agent/token-cost-history.json */
+function getHistoryPath(): string {
+  return join(
+    process.env.HOME || process.env.USERPROFILE || '',
+    '.pi',
+    'agent',
+    'token-cost-history.json',
+  );
+}
+
+/** Load entries from the cross-session history file. */
+function loadHistoryFromFile(): CostEntry[] {
+  const path = getHistoryPath();
+  if (!existsSync(path)) return [];
+  try {
+    const raw = JSON.parse(readFileSync(path, 'utf8'));
+    if (Array.isArray(raw)) return raw;
+    if (raw && Array.isArray(raw.entries)) return raw.entries;
+  } catch {
+    // Ignore parse errors
+  }
+  return [];
+}
+
+/** Append an entry to the cross-session history file. */
+function appendToHistoryFile(entry: CostEntry): void {
+  const path = getHistoryPath();
+  try {
+    const existing = loadHistoryFromFile();
+    existing.push(entry);
+    writeFileSync(path, JSON.stringify(existing, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[token-costs] Failed to write history file:', err);
+  }
 }
 
 function loadUserConfig(): Record<string, PriceOverride> {
@@ -1117,6 +1159,12 @@ let _refreshInterval: ReturnType<typeof setInterval> | null = null;
 
 function loadHistory(ctx: ExtensionContext): void {
   history = { entries: [], version: 1 };
+
+  // First: load from cross-session file (survives restarts)
+  const fileEntries = loadHistoryFromFile();
+  history.entries.push(...fileEntries);
+
+  // Then: load from current session entries (may include entries not yet flushed to file)
   for (const entry of ctx.sessionManager.getEntries()) {
     // Read delta entries (each is a single CostEntry)
     if (entry.type === 'custom' && entry.customType === 'token-cost-entry') {
@@ -1310,6 +1358,9 @@ export default async function (pi: ExtensionAPI) {
     // Previously appended the entire history object every turn, causing
     // JSON.stringify to fail with "Invalid string length" on long sessions.
     pi.appendEntry('token-cost-entry', entry);
+
+    // Persist to cross-session file
+    appendToHistoryFile(entry);
   });
 
   // ─── Commands ──────────────────────────────────────────────────────
@@ -1563,6 +1614,132 @@ export default async function (pi: ExtensionAPI) {
     },
   });
 
+  pi.registerCommand('token-matrix', {
+    description:
+      'Generate a GitHub-style contribution matrix showing daily token/cost usage and open it in your browser',
+    handler: async (_args, ctx) => {
+      if (history.entries.length === 0) {
+        ctx.ui.notify('No token usage history to display.', 'info');
+        return;
+      }
+
+      // Parse args: --weeks N or --months N (default: 12 weeks)
+      const arg = _args?.trim() || '';
+      let weeks = 12;
+      let months = 0;
+      const weeksMatch = arg.match(/--weeks\s+(\d+)/);
+      const monthsMatch = arg.match(/--months\s+(\d+)/);
+      if (weeksMatch) weeks = parseInt(weeksMatch[1], 10);
+      if (monthsMatch) {
+        months = parseInt(monthsMatch[1], 10);
+        weeks = 0; // months overrides weeks
+      }
+
+      // Calculate the date range
+      const startDate =
+        months > 0
+          ? Date.now() - months * 30 * 24 * 60 * 60 * 1000
+          : Date.now() - weeks * 7 * 24 * 60 * 60 * 1000;
+
+      // Helper: get local date string (YYYY-MM-DD) from a Date object
+      const localDateStr = (d: Date): string => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dd}`;
+      };
+
+      // Aggregate entries by calendar day
+      const dayMap = new Map<string, DayData>();
+      for (const entry of history.entries) {
+        if (entry.timestamp < startDate) continue;
+        const date = new Date(entry.timestamp);
+        const dateKey = localDateStr(date);
+
+        if (!dayMap.has(dateKey)) {
+          dayMap.set(dateKey, {
+            date: dateKey,
+            dayOfWeek: date.getDay(),
+            dayOfMonth: date.getDate(),
+            month: date.getMonth(),
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+            costTotal: 0,
+            byModel: {},
+          });
+        }
+
+        const day = dayMap.get(dateKey)!;
+        day.inputTokens += entry.inputTokens;
+        day.outputTokens += entry.outputTokens;
+        day.totalTokens = day.inputTokens + day.outputTokens;
+        day.costTotal += entry.costTotal;
+
+        // Per-model breakdown
+        if (!day.byModel[entry.modelId]) {
+          day.byModel[entry.modelId] = {
+            inputTokens: 0,
+            outputTokens: 0,
+            costTotal: 0,
+          };
+        }
+        day.byModel[entry.modelId].inputTokens += entry.inputTokens;
+        day.byModel[entry.modelId].outputTokens += entry.outputTokens;
+        day.byModel[entry.modelId].costTotal += entry.costTotal;
+      }
+
+      // Sort by date
+      const dayData = Array.from(dayMap.values()).sort((a, b) =>
+        a.date.localeCompare(b.date),
+      );
+
+      if (dayData.length === 0) {
+        const rangeLabel =
+          months > 0
+            ? `${months} month${months > 1 ? 's' : ''}`
+            : `${weeks} week${weeks > 1 ? 's' : ''}`;
+        ctx.ui.notify(`No token usage data in the last ${rangeLabel}.`, 'info');
+        return;
+      }
+
+      // Generate title
+      const rangeLabel =
+        months > 0
+          ? `Last ${months} month${months > 1 ? 's' : ''}`
+          : `Last ${weeks} week${weeks > 1 ? 's' : ''}`;
+      const title = `Token Usage — ${rangeLabel}`;
+
+      // Generate HTML
+      const html = generateMatrixHtml(dayData, title);
+
+      // Write to a temp file and open in browser
+      const tempDir = process.env.TEMP || process.env.TMP || '/tmp';
+      const htmlPath = join(tempDir, 'pi-token-matrix.html');
+      writeFileSync(htmlPath, html, 'utf8');
+
+      // Open in default browser (cross-platform)
+      try {
+        if (process.platform === 'win32') {
+          execSync(`start "" "file:///${htmlPath}"`, { stdio: 'ignore' });
+        } else if (process.platform === 'darwin') {
+          execSync(`open "${htmlPath}"`, { stdio: 'ignore' });
+        } else {
+          execSync(`xdg-open "${htmlPath}"`, { stdio: 'ignore' });
+        }
+        ctx.ui.notify(
+          `Opened token usage matrix in browser. (${dayData.length} days, ${htmlPath})`,
+          'info',
+        );
+      } catch (err) {
+        ctx.ui.notify(
+          `Matrix saved to ${htmlPath} (failed to open browser)`,
+          'info',
+        );
+      }
+    },
+  });
+
   // ─── Tool: record_token_usage (for LLM to call explicitly if needed) ──
 
   pi.registerTool({
@@ -1599,6 +1776,7 @@ export default async function (pi: ExtensionAPI) {
       sessionOutputTokens += params.outputTokens;
       sessionCostTotal += entry.costTotal;
       pi.appendEntry('token-cost-entry', entry);
+      appendToHistoryFile(entry);
 
       return {
         content: [
