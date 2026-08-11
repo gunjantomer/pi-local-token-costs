@@ -28,6 +28,12 @@ You can also set overrides via the `/token-price --set` command:
 /token-price --set ollama/qwen2.5-coder:32b 0.0 0.0
 ```
 
+## Token Cost History — `~/.pi/agent/token-cost-history.json`
+
+Token usage entries are persisted to a JSON file so history survives across Pi sessions. Each entry is appended on every turn and includes timestamp, model ID, input/output tokens, and estimated cost.
+
+This file is auto-created on first use. To clear all historical data, delete the file or run `/token-clear`.
+
 ## Live Pricing Cache — `~/.pi/agent/token-costs-cache.json`
 
 The extension caches OpenRouter API responses for **24 hours** to avoid redundant network calls. This file is auto-created and updated — do not edit manually. To force a refresh, delete the cache file or wait 24 hours.
