@@ -28,6 +28,20 @@ export interface DayData {
 	>;
 }
 
+/** Format a Date as YYYY-MM-DD using LOCAL time (not UTC). */
+function localDateStr(d: Date): string {
+	const y = d.getFullYear();
+	const m = String(d.getMonth() + 1).padStart(2, "0");
+	const dd = String(d.getDate()).padStart(2, "0");
+	return `${y}-${m}-${dd}`;
+}
+
+/** Parse a YYYY-MM-DD string to a Date in local time. */
+function parseLocalDate(dateStr: string): Date {
+	const [y, m, d] = dateStr.split("-").map(Number);
+	return new Date(y, m - 1, d, 0, 0, 0, 0);
+}
+
 /** Organize days into weeks (columns). Each week starts on Sunday. */
 function organizeIntoWeeks(
 	data: DayData[],
@@ -42,25 +56,27 @@ function organizeIntoWeeks(
 	const firstDate = data[0].date;
 	const lastDate = data[data.length - 1].date;
 
-	// Find the Sunday before or on the first date
-	const start = new Date(firstDate + "T00:00:00");
+	// Find the Sunday before or on the first date (local time)
+	const start = parseLocalDate(firstDate);
 	while (start.getDay() !== 0) {
 		start.setDate(start.getDate() - 1);
 	}
 
+	const last = parseLocalDate(lastDate);
+
 	const weeks: { weekStart: string; days: (DayData | null)[] }[] = [];
 	const current = new Date(start);
 
-	while (current <= new Date(lastDate + "T00:00:00")) {
+	while (current <= last) {
 		const weekDays: (DayData | null)[] = [];
 		for (let i = 0; i < 7; i++) {
 			const d = new Date(current);
 			d.setDate(d.getDate() + i);
-			const key = d.toISOString().split("T")[0];
+			const key = localDateStr(d);
 			weekDays.push(dateMap.get(key) || null);
 		}
 		weeks.push({
-			weekStart: current.toISOString().split("T")[0],
+			weekStart: localDateStr(current),
 			days: weekDays,
 		});
 		current.setDate(current.getDate() + 7);
