@@ -8,6 +8,7 @@ Token cost tracking extension for [Pi](https://pi.dev). Tracks token usage and e
 - **Accurate local model matching** via dot-preserved keys, GGUF stripping, and param-count-aware strategies
 - **Savings comparison** — see what running locally costs vs. online equivalents
 - **Cross-session history** with per-model breakdowns
+- **Visual contribution matrix** — GitHub-style heatmap of daily token usage and cost
 - **Offline fallback** with ~60 cloud models + Qwen family pricing
 
 ## Installation
@@ -42,12 +43,16 @@ The powerline footer shows real-time token counts and estimated cost:
 | `/token-stats` | Show current session's token usage and cost breakdown by model |
 | `/token-history` | Show cross-session history of the last 50 messages, grouped by model with pricing source |
 | `/token-clear` | Clear all persisted token usage history (with confirmation) |
+| `/token-matrix` | Open a GitHub-style contribution matrix in your browser showing daily token usage and cost |
+| `/token-matrix --weeks N` | Show the last N weeks of usage (default: 12) |
+| `/token-matrix --months N` | Show the last N months of usage |
 | `/token-price <model-id>` | Show how a specific model is resolved and priced |
 | `/token-price --set <id> $in $out` | Set a custom price override for any model ID |
 
 ## Documentation
 
-- [Configuration](docs/configuration.md) — User price overrides, cache file, dependencies
+- [Configuration](docs/configuration.md) — User price overrides, cache file, history file, dependencies
+- [Token Usage Matrix](docs/token-matrix.md) — Visual contribution grid for daily token/cost tracking
 - [Model Matching](docs/model-matching.md) — Normalization, stripping strategies, priority chain
 - [Architecture](docs/architecture.md) — Data flow, pricing pipeline, state persistence
 - [Troubleshooting](docs/troubleshooting.md) — Common issues and fixes

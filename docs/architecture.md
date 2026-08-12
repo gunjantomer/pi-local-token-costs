@@ -27,7 +27,8 @@
 │                                                              │
 │  message_end    → recordMessage()                           │
 │                    ├─ resolveModel(modelId) ← pricing lookup │
-│                    └─ appendEntry("token-cost-history")      │
+│                    ├─ appendEntry("token-cost-entry")         │
+│                    └─ appendToHistoryFile(entry)              │
 │                                                              │
 │  model_select   → update currentModelId                     │
 │                                                              │
@@ -72,15 +73,21 @@ resolveModel(modelId)
 
 ## State Persistence
 
-Token history is stored via `pi.appendEntry("token-cost-entry", entry)`, which persists **only the delta** (single new entry) in the session file after each turn. This avoids unbounded growth of the session log that previously caused `JSON.stringify` "Invalid string length" errors on long sessions.
+Token history uses a **dual persistence** strategy:
 
-On session start, `loadHistory()` reconstructs the full history by scanning all `token-cost-entry` entries from the session log. Backward compatibility is maintained for old `token-cost-history` entries.
+1. **Session entries** — Each turn, `pi.appendEntry("token-cost-entry", entry)` persists **only the delta** (single new entry) in the session file. This avoids unbounded growth of the session log.
+2. **File-based history** — Each entry is also appended to `~/.pi/agent/token-cost-history.json`, a standalone JSON file that survives across Pi sessions.
+
+On session start, `loadHistory()` loads from both sources:
+
+- Reads `token-cost-history.json` for historical data from previous sessions
+- Scans current session `token-cost-entry` entries (may include entries not yet flushed to file)
 
 This means:
 
 - History survives **session restarts** (reload, crash)
 - History survives **session forks/clones** (correct state for each branch point)
-- History from **previous sessions** is loaded on `session_start` by scanning all entries
+- History from **previous sessions** is available immediately on load
 - Session log stays small — each entry is ~200 bytes instead of growing unboundedly
 
 ## Refresh Strategy
