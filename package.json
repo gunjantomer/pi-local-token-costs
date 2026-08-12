@@ -18,6 +18,7 @@
   "homepage": "https://github.com/gunjantomer/pi-local-token-costs#readme",
   "files": [
     "extensions/",
+    "lib/",
     "docs/",
     "README.md",
     "CHANGELOG.md"
