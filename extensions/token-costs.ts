@@ -30,7 +30,7 @@ import { join } from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { Type } from 'typebox';
 
-import { generateMatrixHtml, type DayData } from './matrix-html';
+import { generateMatrixHtml, type DayData } from '../lib/matrix-html';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
