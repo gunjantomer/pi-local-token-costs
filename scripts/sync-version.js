@@ -50,11 +50,19 @@ const PATTERNS = [
 function collectFiles(dir, list = []) {
   for (const entry of fs.readdirSync(dir)) {
     const full = path.join(dir, entry);
-    if (entry === 'node_modules' || entry === '.git' || entry === '.pi-lens') continue;
+    if (entry === 'node_modules' || entry === '.git' || entry === '.pi-lens')
+      continue;
     const stat = fs.statSync(full);
     if (stat.isDirectory()) {
       collectFiles(full, list);
-    } else if (stat.isFile() && /\.(md|txt|json|yml|yaml|sh|html|css)$/.test(entry) && entry !== 'package-lock.json' && entry !== 'CHANGELOG.md' && full !== SELF && full !== pkgPath) {
+    } else if (
+      stat.isFile() &&
+      /\.(md|txt|json|yml|yaml|sh|html|css)$/.test(entry) &&
+      entry !== 'package-lock.json' &&
+      entry !== 'CHANGELOG.md' &&
+      full !== SELF &&
+      full !== pkgPath
+    ) {
       list.push(full);
     }
   }
