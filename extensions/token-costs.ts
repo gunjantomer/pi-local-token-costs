@@ -27,7 +27,8 @@ import type {
 
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { Type } from 'typebox';
 
 import { generateMatrixHtml, type DayData } from '../lib/matrix-html';
@@ -320,13 +321,10 @@ const ALIAS_RULES: AliasRule[] = [
 
 // ─── Cache Path ─────────────────────────────────────────────────────────────
 
-function getCachePath(): string {
-  return join(
-    process.env.HOME || process.env.USERPROFILE || '',
-    '.pi',
-    'agent',
-    'token-costs-cache.json',
-  );
+function getCachePath(): string | undefined {
+  const home = process.env.HOME || process.env.USERPROFILE;
+  if (!home) return undefined;
+  return join(home, '.pi', 'agent', 'token-costs-cache.json');
 }
 
 // ─── User Config Path ──────────────────────────────────────────────────────
@@ -406,7 +404,7 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 async function fetchLivePricing(): Promise<boolean> {
   // Check cache first
   const cachePath = getCachePath();
-  if (existsSync(cachePath)) {
+  if (cachePath && existsSync(cachePath)) {
     try {
       const cached: LivePriceCache = JSON.parse(
         readFileSync(cachePath, 'utf8'),
@@ -546,7 +544,9 @@ async function fetchLivePricing(): Promise<boolean> {
       timestamp: Date.now(),
       models: Object.fromEntries(livePrices),
     };
-    writeFileSync(cachePath, JSON.stringify(cacheData, null, 2));
+    if (cachePath) {
+      writeFileSync(cachePath, JSON.stringify(cacheData, null, 2));
+    }
 
     console.log(
       `[token-costs] Loaded live pricing for ${count} models from OpenRouter`,
@@ -702,6 +702,171 @@ function loadFallbackPricing(): void {
         modelIdMap.set(dotKey.toLowerCase(), key);
       }
     }
+  }
+}
+
+// ─── Targeted Per-Model Price Fetch ──────────────────────────────────────
+// The full OpenRouter list is cached for 24h, so a newly released model can be
+// missing from local pricing for up to a day after launch. When the active
+// model resolves to nothing (source "local-default"), we make one fresh
+// OpenRouter call and match just that model — no source edits needed for new
+// releases. The param count (e.g. "27b") is preserved in every lookup
+// candidate: pricing varies by model size, so a family-level or different-size
+// model's price is never substituted.
+
+/** Models already targeted-fetched this process — avoids retry storms on session restarts. */
+const _targetedFetchAttempted = new Set<string>();
+
+/** Write current livePrices to the cache file, preserving a still-fresh timestamp. */
+function persistLivePriceCache(): void {
+  try {
+    const path = getCachePath();
+    if (!path) return;
+    let timestamp = Date.now();
+    if (existsSync(path)) {
+      const existing = JSON.parse(readFileSync(path, 'utf8')) as LivePriceCache;
+      if (Date.now() - existing.timestamp < CACHE_TTL_MS) {
+        // We only added models on top of a fresh cache — keep its timestamp.
+        timestamp = existing.timestamp;
+      }
+    }
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(
+      path,
+      JSON.stringify(
+        { timestamp, models: Object.fromEntries(livePrices) },
+        null,
+        2,
+      ),
+    );
+  } catch (err) {
+    console.warn(`[token-costs] Failed to persist price cache: ${err}`);
+  }
+}
+
+/** Build lookup candidates for a model ID, most specific first.
+ *
+ * The param count is never stripped — a 27B model must not be priced from a
+ * 35B sibling or a family-level key. Candidates vary only in quantization
+ * tags, variant suffixes, org-prefix duplication, and dot/dash spelling. */
+export function buildLookupCandidates(modelId: string): string[] {
+  const normalized = normalizeModelId(modelId);
+  const out: string[] = [normalized];
+
+  // Strip GGUF quantization tag — keep param count
+  const dequant = normalized.replace(
+    /-[qbf][p]?[0-9]+(?:[_-][a-z0-9]+)*(?:-[kK]_[mMsS]|_[0-9])*(?:-[fF]16|[bB]f16)?$/i,
+    '',
+  );
+  if (dequant && dequant !== normalized) out.push(dequant);
+
+  // Strip trailing variant/semantic suffix — keep param count
+  const noVariant = out[out.length - 1].replace(
+    /-(?:instruct|chat|turbo|h|gq|i1)(?:-[0-9]+)?$/i,
+    '',
+  );
+  if (noVariant && !out.includes(noVariant)) out.push(noVariant);
+
+  // Strip org-prefix duplication ("qwen-qwen3.8-27b" → "qwen3.8-27b") — keep param count
+  const parts = normalized.split('-');
+  if (parts.length >= 2 && /^[a-z]+$/i.test(parts[0])) {
+    out.push(parts.slice(1).join('-'));
+  }
+
+  // Dot/dash version spelling: OpenRouter keys use dots ("qwen3.8-27b"),
+  // local model IDs often use dashes ("qwen3-8-27b"). Try both spellings.
+  const expanded: string[] = [];
+  for (const c of out) {
+    if (expanded.includes(c)) continue;
+    expanded.push(c);
+    const dotted = c.replace(/^([a-z]+)(\d+)-(\d+)(?=-|$)/, '$1$2.$3');
+    if (dotted !== c) expanded.push(dotted);
+  }
+
+  return [...new Set(expanded)];
+}
+
+/** Fetch fresh pricing for one specific model from OpenRouter, bypassing the
+ *  24h cache so newly released models are found immediately.
+ *  Returns true if a price was found and registered. */
+export async function fetchPriceForModel(
+  modelId: string,
+  onResolved?: (orId: string, price: MinPrice) => void,
+): Promise<boolean> {
+  const normalized = normalizeModelId(modelId);
+  if (_targetedFetchAttempted.has(normalized)) return false;
+
+  // Already resolvable from local sources? Nothing to do.
+  if (resolveModel(modelId).source !== 'local-default') return true;
+
+  _targetedFetchAttempted.add(normalized);
+  try {
+    console.log(
+      `[token-costs] "${modelId}" not in local pricing — fetching fresh from OpenRouter...`,
+    );
+    const response = await fetch('https://openrouter.ai/api/v1/models', {
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) {
+      console.warn(
+        `[token-costs] Targeted price fetch failed: HTTP ${response.status}`,
+      );
+      return false;
+    }
+    const data: ORApiResponse = await response.json();
+
+    for (const candidate of buildLookupCandidates(modelId)) {
+      // One list entry per provider offering this model.
+      const matches = data.data.filter(
+        (m) => normalizeModelName(m.id) === candidate,
+      );
+      if (matches.length === 0) continue;
+
+      // Cheapest provider wins — per-field min, consistent with the full fetch.
+      let bestIn = Infinity;
+      let bestOut = Infinity;
+      let bestId = '';
+      for (const m of matches) {
+        const input = parseFloat(m.pricing.prompt || '0') * 1_000_000;
+        const output = parseFloat(m.pricing.completion || '0') * 1_000_000;
+        if (!isFinite(input) && !isFinite(output)) continue;
+        if (isFinite(input) && input < bestIn) bestIn = input;
+        if (isFinite(output) && output < bestOut) bestOut = output;
+        if (!bestId) bestId = m.id;
+      }
+      if (!bestId || (!isFinite(bestIn) && !isFinite(bestOut))) continue;
+
+      const price: MinPrice = {
+        input: isFinite(bestIn) ? bestIn : 0,
+        output: isFinite(bestOut) ? bestOut : 0,
+      };
+
+      // Register under the matched candidate AND the original normalized ID so
+      // future resolveModel() calls direct-hit at step 3.
+      livePrices.set(candidate, price);
+      modelIdMap.set(candidate, bestId);
+      if (candidate !== normalized) {
+        livePrices.set(normalized, price);
+        modelIdMap.set(normalized, bestId);
+      }
+      registerVariants(candidate, price.input, price.output);
+      persistLivePriceCache();
+
+      console.log(
+        `[token-costs] Found pricing for ${modelId} → ${bestId} ($${price.input.toFixed(5)} / $${price.output.toFixed(5)} per M)`,
+      );
+      onResolved?.(bestId, price);
+      return true;
+    }
+
+    console.log(
+      `[token-costs] No OpenRouter match for "${modelId}" — treating as local/free`,
+    );
+    return false;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[token-costs] Targeted price fetch failed: ${msg}`);
+    return false;
   }
 }
 
@@ -1058,16 +1223,28 @@ function resolveModel(modelId: string): {
  *  - Exact match, or
  *  - Normalized starts with key + "-", or
  *  - Normalized ends with "-" + key, or
- *  - Key contains a long word (>3 chars) from the normalized ID
+ *  - A long word (>3 chars) from the normalized ID is a FULL token of the key,
+ *    AND every size-bearing token in the key (e.g. "27b", "a95b") also appears
+ *    in the normalized ID — pricing varies by parameter count, so matching on
+ *    the family prefix alone (e.g. "qwen3.8" ~ "qwen3.8-27b") is not enough.
  */
 function keyMatches(normalized: string, key: string): boolean {
   const keyLower = key.toLowerCase();
-  return (
+  if (
     normalized === keyLower ||
     normalized.startsWith(keyLower + '-') ||
-    normalized.endsWith('-' + keyLower) ||
-    key.includes(normalized.split('-').find((x) => x.length > 3) ?? '')
-  );
+    normalized.endsWith('-' + keyLower)
+  ) {
+    return true;
+  }
+  const longWord = normalized.split('-').find((x) => x.length > 3);
+  if (!longWord) return false;
+  if (!keyLower.split('-').includes(longWord)) return false;
+  const normTokens = new Set(normalized.split('-'));
+  return keyLower
+    .split('-')
+    .filter((t) => /\d/.test(t) && /[a-z]/i.test(t))
+    .every((t) => normTokens.has(t));
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -1259,12 +1436,28 @@ export default async function (pi: ExtensionAPI) {
       } else {
         ctx.ui.notify(`Token tracking: ${name} (local/free model)`, 'info');
       }
+
+      // New-release gap: the cached OpenRouter list can lag by up to 24h.
+      // If this model matched nothing locally, fetch its price individually.
+      if (resolved.source === 'local-default') {
+        const mid = currentModelId;
+        fetchPriceForModel(mid, (_orId, price) => {
+          try {
+            ctx.ui.notify(
+              `Pricing found for ${name}: $${price.input.toFixed(5)} / $${price.output.toFixed(5)} per M tokens (OpenRouter)`,
+              'info',
+            );
+            updateStatus(ctx);
+          } catch {
+            /* session may have ended */
+          }
+        }).catch(() => {});
+      }
     }
 
     // Set up periodic status updates in powerline footer (every 1.5s)
-    let pollHandle: ReturnType<typeof setInterval> | undefined;
     if (ctx.mode === 'tui') {
-      pollHandle = setInterval(() => updateStatus(ctx), 1500);
+      setInterval(() => updateStatus(ctx), 1500);
       updateStatus(ctx); // Initial render
     }
 
@@ -1276,7 +1469,7 @@ export default async function (pi: ExtensionAPI) {
     }, CACHE_TTL_MS);
   });
 
-  pi.on('session_shutdown', async (event, _ctx) => {
+  pi.on('session_shutdown', async (_event, _ctx) => {
     if (_refreshInterval) {
       clearInterval(_refreshInterval);
       _refreshInterval = null;
@@ -1285,8 +1478,19 @@ export default async function (pi: ExtensionAPI) {
     _ctx.ui.setStatus(STATUS_KEY, undefined);
   });
 
-  pi.on('model_select', async (event, _ctx) => {
+  pi.on('model_select', async (event, ctx) => {
     currentModelId = event.model.id;
+    // Same new-release gap handling when switching to an unknown model mid-session.
+    if (resolveModel(event.model.id).source === 'local-default') {
+      const mid = event.model.id;
+      fetchPriceForModel(mid, () => {
+        try {
+          updateStatus(ctx);
+        } catch {
+          /* ignore */
+        }
+      }).catch(() => {});
+    }
   });
 
   pi.on('message_end', async (event, ctx) => {
@@ -1405,11 +1609,12 @@ export default async function (pi: ExtensionAPI) {
       ];
 
       if (
-        (resolved && resolved.price.input > 0) ||
-        resolved?.price.output > 0
+        resolved &&
+        ((resolved.price && resolved.price.input > 0) ||
+          (resolved.price && resolved.price.output > 0))
       ) {
         lines.push(
-          `Price: $${resolved.price.input.toFixed(5)} / $${resolved.price.output.toFixed(5)} per M tokens`,
+          `Price: $${resolved.price!.input.toFixed(5)} / $${resolved.price!.output.toFixed(5)} per M tokens`,
         );
       } else if (resolved) {
         lines.push('Price: local/free model');
@@ -1755,7 +1960,7 @@ export default async function (pi: ExtensionAPI) {
         Type.String({ description: 'Model ID (defaults to current model)' }),
       ),
     }),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
       const modelId = params.modelId || currentModelId;
       const resolved = resolveModel(modelId);
 
@@ -1789,6 +1994,7 @@ export default async function (pi: ExtensionAPI) {
               `Est. cost: ${fmtCost(entry.costTotal)}`,
           },
         ],
+        details: { modelId, entry },
       };
     },
   });
