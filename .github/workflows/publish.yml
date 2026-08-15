@@ -21,5 +21,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false # never use caching in release builds
       - run: npm ci
+      # Sync version from package.json into README, docs, etc.
+      - run: npm run sync-version
       - run: npm run build --if-present
       - run: npm publish # Or: npm stage publish
