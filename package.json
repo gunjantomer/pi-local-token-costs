@@ -1,6 +1,6 @@
 {
   "name": "pi-local-token-costs",
-  "version": "1.0.3",
+  "version": "1.2.3",
   "description": "Token cost tracking extension for Pi Agent — live footer display with cheapest OpenRouter pricing, cross-session history, and local model matching",
   "keywords": [
     "pi-package"
