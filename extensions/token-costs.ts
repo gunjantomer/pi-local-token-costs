@@ -209,6 +209,7 @@ const FALLBACK_PRICES: Record<string, { input: number; output: number }> = {
   'qwen3-5-plus-20260420': { input: 0.3, output: 1.8 },
   'qwen3-5-397b-a17b': { input: 0.385, output: 2.45 },
   'qwen3-6-27b': { input: 0.285, output: 2.4 },
+  'qwen3-8-27b': { input: 0.45, output: 3.2 },
   'qwen3-6-max-preview': { input: 1.04, output: 6.24 },
   'qwen3-7': { input: 1.25, output: 3.75 },
   // Qwen3.x — very large
@@ -227,6 +228,7 @@ const FALLBACK_PRICES: Record<string, { input: number; output: number }> = {
   'qwen3.6-35b-a3b': { input: 0.14, output: 1.0 },
   'qwen3.6-35b-a3b-instruct': { input: 0.14, output: 1.0 },
   'qwen3.6-27b': { input: 0.285, output: 2.4 },
+  'qwen3.8-27b': { input: 0.45, output: 3.2 },
   'qwen3.6-flash': { input: 0.1875, output: 1.125 },
   'qwen3.6-plus': { input: 0.325, output: 1.95 },
   'qwen3.6-max-preview': { input: 1.04, output: 6.24 },
