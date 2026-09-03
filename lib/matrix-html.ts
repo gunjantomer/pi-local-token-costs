@@ -5,121 +5,121 @@
  */
 
 export interface DayData {
-	/** ISO date string YYYY-MM-DD */
-	date: string;
-	/** Day of week (0=Sun, 6=Sat) */
-	dayOfWeek: number;
-	/** Day of month (1-31) */
-	dayOfMonth: number;
-	/** Month (0=Jan, 11=Dec) */
-	month: number;
-	/** Total input tokens used that day */
-	inputTokens: number;
-	/** Total output tokens used that day */
-	outputTokens: number;
-	/** Total tokens (input + output) */
-	totalTokens: number;
-	/** Total estimated cost in USD */
-	costTotal: number;
-	/** Breakdown by model ID */
-	byModel: Record<
-		string,
-		{ inputTokens: number; outputTokens: number; costTotal: number }
-	>;
+  /** ISO date string YYYY-MM-DD */
+  date: string;
+  /** Day of week (0=Sun, 6=Sat) */
+  dayOfWeek: number;
+  /** Day of month (1-31) */
+  dayOfMonth: number;
+  /** Month (0=Jan, 11=Dec) */
+  month: number;
+  /** Total input tokens used that day */
+  inputTokens: number;
+  /** Total output tokens used that day */
+  outputTokens: number;
+  /** Total tokens (input + output) */
+  totalTokens: number;
+  /** Total estimated cost in USD */
+  costTotal: number;
+  /** Breakdown by model ID */
+  byModel: Record<
+    string,
+    { inputTokens: number; outputTokens: number; costTotal: number }
+  >;
 }
 
 /** Format a Date as YYYY-MM-DD using LOCAL time (not UTC). */
 function localDateStr(d: Date): string {
-	const y = d.getFullYear();
-	const m = String(d.getMonth() + 1).padStart(2, "0");
-	const dd = String(d.getDate()).padStart(2, "0");
-	return `${y}-${m}-${dd}`;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
 }
 
 /** Parse a YYYY-MM-DD string to a Date in local time. */
 function parseLocalDate(dateStr: string): Date {
-	const [y, m, d] = dateStr.split("-").map(Number);
-	return new Date(y, m - 1, d, 0, 0, 0, 0);
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
 }
 
 /** Organize days into weeks (columns). Each week starts on Sunday. */
 function organizeIntoWeeks(
-	data: DayData[],
+  data: DayData[],
 ): { weekStart: string; days: (DayData | null)[] }[] {
-	if (data.length === 0) return [];
+  if (data.length === 0) return [];
 
-	const dateMap = new Map<string, DayData>();
-	for (const d of data) {
-		dateMap.set(d.date, d);
-	}
+  const dateMap = new Map<string, DayData>();
+  for (const d of data) {
+    dateMap.set(d.date, d);
+  }
 
-	const firstDate = data[0].date;
-	const lastDate = data[data.length - 1].date;
+  const firstDate = data[0].date;
+  const lastDate = data[data.length - 1].date;
 
-	// Find the Sunday before or on the first date (local time)
-	const start = parseLocalDate(firstDate);
-	while (start.getDay() !== 0) {
-		start.setDate(start.getDate() - 1);
-	}
+  // Find the Sunday before or on the first date (local time)
+  const start = parseLocalDate(firstDate);
+  while (start.getDay() !== 0) {
+    start.setDate(start.getDate() - 1);
+  }
 
-	const last = parseLocalDate(lastDate);
+  const last = parseLocalDate(lastDate);
 
-	const weeks: { weekStart: string; days: (DayData | null)[] }[] = [];
-	const current = new Date(start);
+  const weeks: { weekStart: string; days: (DayData | null)[] }[] = [];
+  const current = new Date(start);
 
-	while (current <= last) {
-		const weekDays: (DayData | null)[] = [];
-		for (let i = 0; i < 7; i++) {
-			const d = new Date(current);
-			d.setDate(d.getDate() + i);
-			const key = localDateStr(d);
-			weekDays.push(dateMap.get(key) || null);
-		}
-		weeks.push({
-			weekStart: localDateStr(current),
-			days: weekDays,
-		});
-		current.setDate(current.getDate() + 7);
-	}
+  while (current <= last) {
+    const weekDays: (DayData | null)[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(current);
+      d.setDate(d.getDate() + i);
+      const key = localDateStr(d);
+      weekDays.push(dateMap.get(key) || null);
+    }
+    weeks.push({
+      weekStart: localDateStr(current),
+      days: weekDays,
+    });
+    current.setDate(current.getDate() + 7);
+  }
 
-	return weeks;
+  return weeks;
 }
 
 /** Generate a complete, self-contained HTML document as a string. */
 export function generateMatrixHtml(data: DayData[], title: string): string {
-	const maxTokens = Math.max(...data.map((d) => d.totalTokens), 1);
-	const maxCost = Math.max(...data.map((d) => d.costTotal), 0.00001);
+  const maxTokens = Math.max(...data.map((d) => d.totalTokens), 1);
+  const maxCost = Math.max(...data.map((d) => d.costTotal), 0.00001);
 
-	// Organize into weeks for the grid
-	const weeks = organizeIntoWeeks(data);
+  // Organize into weeks for the grid
+  const weeks = organizeIntoWeeks(data);
 
-	// Collect unique model IDs for color assignment
-	const modelList: string[] = [];
-	for (const d of data) {
-		for (const m of Object.keys(d.byModel)) {
-			if (!modelList.includes(m)) modelList.push(m);
-		}
-	}
+  // Collect unique model IDs for color assignment
+  const modelList: string[] = [];
+  for (const d of data) {
+    for (const m of Object.keys(d.byModel)) {
+      if (!modelList.includes(m)) modelList.push(m);
+    }
+  }
 
-	// Compute totals for the header
-	const totalTokens = data.reduce((s, d) => s + d.totalTokens, 0);
-	const totalCost = data.reduce((s, d) => s + d.costTotal, 0);
-	const totalDays = data.length;
+  // Compute totals for the header
+  const totalTokens = data.reduce((s, d) => s + d.totalTokens, 0);
+  const totalCost = data.reduce((s, d) => s + d.costTotal, 0);
+  const totalDays = data.length;
 
-	// Format numbers
-	const fmtTokens = (n: number) => {
-		if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-		if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
-		return `${n}`;
-	};
+  // Format numbers
+  const fmtTokens = (n: number) => {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
+    return `${n}`;
+  };
 
-	const fmtCost = (n: number) => {
-		if (n >= 1) return `$${n.toFixed(2)}`;
-		if (n >= 0.01) return `$${n.toFixed(3)}`;
-		return `$${n.toFixed(5)}`;
-	};
+  const fmtCost = (n: number) => {
+    if (n >= 1) return `$${n.toFixed(2)}`;
+    if (n >= 0.01) return `$${n.toFixed(3)}`;
+    return `$${n.toFixed(5)}`;
+  };
 
-	return `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -155,7 +155,7 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
   }
 
   .container {
-    max-width: 1200px;
+    max-width: 1800px;
     margin: 0 auto;
   }
 
@@ -208,6 +208,7 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
   .controls {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 1rem;
     margin-bottom: 1.5rem;
   }
@@ -243,8 +244,10 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
   .legend {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
-    margin-left: auto;
+    flex-wrap: wrap;
+    flex-basis: 100%;
+    gap: 0.5rem 1.5rem;
+    margin-left: 0;
     font-size: 0.75rem;
     color: var(--text-muted);
   }
@@ -270,64 +273,35 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
 
   .matrix-wrapper {
     display: flex;
-    align-items: flex-start;
     overflow-x: auto;
     padding-bottom: 1rem;
   }
 
-  .matrix {
-    display: inline-grid;
+  .grid-body {
+    display: grid;
+    grid-template-rows: repeat(7, auto);
     gap: 2px;
-    padding: 1rem;
+    padding: 8px;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: 8px;
-  }
-
-  .month-labels {
-    display: flex;
-    margin-left: 2rem;
-    margin-bottom: 0.25rem;
-    padding: 0 1rem;
-  }
-
-  .month-label {
-    font-size: 0.6875rem;
-    color: var(--text-muted);
-    position: absolute;
-  }
-
-  .day-labels {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding-right: 0.5rem;
-    justify-content: start;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .day-label {
     font-size: 0.6875rem;
     color: var(--text-muted);
-    height: 13px;
-    line-height: 13px;
-    text-align: right;
-    width: 3rem;
-  }
-
-  .grid-body {
     display: flex;
-    gap: 2px;
-  }
-
-  .week-column {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.5rem;
+    white-space: nowrap;
   }
 
   .cell {
-    width: 13px;
-    height: 13px;
+    width: 100%;
+    aspect-ratio: 1 / 1;
     border-radius: 2px;
     background: var(--level-0);
     cursor: pointer;
@@ -455,15 +429,6 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
   </header>
 
   <div class="matrix-wrapper">
-    <div class="day-labels">
-      <div class="day-label">Sun</div>
-      <div class="day-label">Mon</div>
-      <div class="day-label">Tue</div>
-      <div class="day-label">Wed</div>
-      <div class="day-label">Thu</div>
-      <div class="day-label">Fri</div>
-      <div class="day-label">Sat</div>
-    </div>
     <div class="grid-body" id="matrix"></div>
   </div>
 
@@ -534,15 +499,24 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
     return '$' + n.toFixed(5);
   }
 
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
   function buildMatrix() {
     const matrix = document.getElementById('matrix');
     matrix.innerHTML = '';
+    const numWeeks = WEEKS.length;
+    // One fixed label column + one fluid column per week. Cells are square (aspect-ratio)
+    // and stretch to fill the available width, so the matrix spans the screen responsively.
+    matrix.style.gridTemplateColumns = '3rem repeat(' + numWeeks + ', minmax(24px, 1fr))';
 
-    for (const week of WEEKS) {
-      const col = document.createElement('div');
-      col.className = 'week-column';
+    for (let d = 0; d < 7; d++) {
+      const label = document.createElement('div');
+      label.className = 'day-label';
+      label.textContent = DAY_NAMES[d];
+      matrix.appendChild(label);
 
-      for (const day of week.days) {
+      for (let w = 0; w < numWeeks; w++) {
+        const day = WEEKS[w].days[d];
         const cell = document.createElement('div');
         cell.className = 'cell';
 
@@ -569,10 +543,8 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
           cell.style.visibility = 'hidden';
         }
 
-        col.appendChild(cell);
+        matrix.appendChild(cell);
       }
-
-      matrix.appendChild(col);
     }
   }
 
