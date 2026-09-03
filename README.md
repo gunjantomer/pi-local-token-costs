@@ -2,6 +2,20 @@
 
 Token cost tracking extension for [Pi](https://pi.dev). Tracks token usage and estimated costs for every model in every session. Shows live costs in the powerline footer, maintains cross-session history, and always uses the cheapest available provider pricing from OpenRouter.
 
+## Screenshots
+
+### Token usage matrix (`/token-matrix`)
+
+A GitHub-style heatmap of daily token usage and cost across sessions.
+
+![Token usage matrix](https://raw.githubusercontent.com/gunjantomer/pi-local-token-costs/main/media/matrix.png)
+
+### Live footer
+
+Real-time token counts and estimated cost in the powerline footer.
+
+![Live footer display](https://raw.githubusercontent.com/gunjantomer/pi-local-token-costs/main/media/screenshot.png)
+
 ## Key Features
 
 - **Live pricing** from 30+ providers (cheapest rate automatically selected)
