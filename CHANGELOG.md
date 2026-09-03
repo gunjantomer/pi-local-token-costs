@@ -1,6 +1,6 @@
 # Changelog
 
-### Upcoming — Token usage contribution matrix and cross-session file persistence
+### 2026-09-03 — 1.4.0: Token usage contribution matrix, responsive layout, and cross-session file persistence
 
 **New feature:** `/token-matrix` command generates a GitHub-style contribution grid showing daily token usage and cost, viewable in your default browser.
 
