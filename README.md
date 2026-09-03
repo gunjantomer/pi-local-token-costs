@@ -32,7 +32,7 @@ Real-time token counts and estimated cost in the powerline footer.
 pi install npm:pi-local-token-costs
 
 # From git
-pi install git:github.com/gunjantomer/pi-local-token-costs@v1.3.0
+pi install git:github.com/gunjantomer/pi-local-token-costs@v1.4.0
 ```
 
 Requires [pi-powerline-footer](https://github.com/gsanhueza/pi-powerline-footer) for the footer display. Restart pi or run `/reload` after installing.
