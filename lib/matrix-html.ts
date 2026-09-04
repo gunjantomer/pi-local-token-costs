@@ -155,7 +155,7 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
   }
 
   .container {
-    max-width: 1800px;
+    max-width: 1200px;
     margin: 0 auto;
   }
 
@@ -285,8 +285,8 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: 8px;
-    flex: 1 1 auto;
-    min-width: 0;
+    width: max-content;
+    flex: 0 0 auto;
   }
 
   .day-label {
@@ -301,7 +301,7 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
 
   .cell {
     width: 100%;
-    aspect-ratio: 1 / 1;
+    height: var(--cell-h, 20px);
     border-radius: 2px;
     background: var(--level-0);
     cursor: pointer;
@@ -453,7 +453,8 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
   }
 
   /** Build gradient background for a cell based on model proportions */
-  function buildGradient(day) {
+  function buildGradient(day, orientation) {
+    const axis = orientation || 'to bottom';
     const models = Object.entries(day.byModel || {});
     if (models.length === 0) return 'var(--cell-bg)';
     if (models.length === 1) {
@@ -474,7 +475,7 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
       const color = getModelColor(modelId, idx, MODEL_LIST.length);
       stops.push(color + ' ' + startPct + '% ' + endPct + '%');
     }
-    return 'linear-gradient(to bottom, ' + stops.join(', ') + ')';
+    return 'linear-gradient(' + axis + ', ' + stops.join(', ') + ')';
   }
 
   function getLevel(value, max) {
@@ -501,13 +502,45 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
 
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+  // Layout sizing. We measure the available width and derive a per-week column width, then
+  // pick a mode:
+  //   - SQUARE: the column fits in a square (<= SQUARE_MAX). Cells are square and model
+  //     colors stack vertically (top -> bottom).
+  //   - ELONGATED: the available width would make cells wider than SQUARE_MAX (i.e. there are
+  //     not enough weeks to fill the grid with sensible squares). Cells become elongated bars
+  //     (capped at ELONG_MAX wide, ELONG_H tall) and the model colors run side by side
+  //     (left -> right), so the extra width is actually used instead of producing giant blocks.
+  const SQUARE_MAX = 24;  // widest we keep a block square before switching to elongated
+  const CELL_MIN   = 12;  // floor for square blocks
+  const ELONG_MAX  = 96;  // max width for elongated (side-by-side) blocks
+  const ELONG_H    = 16;  // fixed height for elongated blocks
+  const LABEL_COL  = 48;  // width of the day-label column (3rem)
+  const GAP_PX     = 2;   // grid gap between columns
+
+  function computeLayout() {
+    const wrapper = document.querySelector('.matrix-wrapper');
+    const numWeeks = WEEKS.length;
+    if (!wrapper || numWeeks === 0) {
+      return { cellW: SQUARE_MAX, cellH: SQUARE_MAX, orientation: 'to bottom' };
+    }
+    const padBorder = 18; // grid-body: 8px padding * 2 + 1px border * 2
+    const gaps = numWeeks * GAP_PX;
+    const perWeek = (wrapper.clientWidth - padBorder - LABEL_COL - gaps) / numWeeks;
+    if (perWeek <= SQUARE_MAX) {
+      const w = Math.max(CELL_MIN, Math.round(perWeek));
+      return { cellW: w, cellH: w, orientation: 'to bottom' };
+    }
+    const w = Math.min(ELONG_MAX, Math.round(perWeek));
+    return { cellW: w, cellH: ELONG_H, orientation: 'to right' };
+  }
+
   function buildMatrix() {
     const matrix = document.getElementById('matrix');
     matrix.innerHTML = '';
     const numWeeks = WEEKS.length;
-    // One fixed label column + one fluid column per week. Cells are square (aspect-ratio)
-    // and stretch to fill the available width, so the matrix spans the screen responsively.
-    matrix.style.gridTemplateColumns = '3rem repeat(' + numWeeks + ', minmax(24px, 1fr))';
+    const layout = computeLayout();
+    matrix.style.setProperty('--cell-h', layout.cellH + 'px');
+    matrix.style.gridTemplateColumns = '3rem repeat(' + numWeeks + ', ' + layout.cellW + 'px)';
 
     for (let d = 0; d < 7; d++) {
       const label = document.createElement('div');
@@ -532,8 +565,8 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
           cell.setAttribute('data-cost', day.costTotal);
           cell.setAttribute('data-models', JSON.stringify(day.byModel || {}));
 
-          // Apply gradient background based on model proportions
-          cell.style.background = buildGradient(day);
+          // Apply gradient background based on model proportions (orientation depends on layout)
+          cell.style.background = buildGradient(day, layout.orientation);
 
           cell.addEventListener('mouseenter', showTooltip);
           cell.addEventListener('mouseleave', hideTooltip);
@@ -630,6 +663,12 @@ legend.innerHTML = html;
 
 buildMatrix();
 buildLegend();
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(buildMatrix, 120);
+});
 </script>
 </body>
 </html>`;
