@@ -1,5 +1,15 @@
 # Changelog
 
+### 2026-09-04 — 1.4.3: Full-range matrix grid with empty day blocks; hover and tooltip polish
+
+**Change:** The matrix now renders a block for every day in the requested range (anchored to today), like the GitHub contribution graph — days without token usage show as empty level-0 blocks instead of the grid collapsing to the span between the first and last usage date.
+
+**Polish:**
+
+- Hover highlight reworked: smaller scale (1.25), the hovered block becomes fully opaque so it no longer blends with blocks behind it, and a crisp white outline ring replaces the soft border
+- Tooltip capped at 340px wide; long model names in "Models used" wrap in their own column instead of overlapping the token/cost count
+- Tooltip position flips and clamps at all screen edges, so it never renders off-screen (e.g. when hovering the last column)
+
 ### 2026-09-03 — 1.4.2: Remove redundant Cost/Tokens toggle
 
 **Change:** Dropped the Cost($)/Tokens toggle from the matrix. Each model's cost is estimated as a per-token OpenRouter price, so the cost and token views were effectively the same picture (16/17 of the tracked days rendered identically). Cell intensity is now always cost-based so the costly days stand out; both metrics remain visible in the per-cell tooltip and the header stats.

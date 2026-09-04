@@ -17,15 +17,15 @@ The matrix displays:
 
 - **Rows**: Days of the week (Sun–Sat)
 - **Columns**: Weeks, starting from the Sunday of the first week
-- **Color**: Each model gets a unique color. Days with multiple models show a proportional gradient.
-- **Intensity**: Darker/more saturated cells indicate higher usage (5 levels based on cost or token count)
+- **Blocks**: A block is rendered for **every day** in the requested range. The grid always spans the full `--weeks`/`--months` window ending today — not just the days with data — so its size stays consistent regardless of data sparsity
+- **Color**: Each model gets a unique color. Days with multiple models show a proportional gradient. Days without token usage render as empty blocks (no color), like GitHub's contribution grid
+- **Intensity**: Darker/more saturated cells indicate higher usage (5 levels based on cost)
 
 ## Interactive Features
 
 | Feature | Description |
 |---------|-------------|
-| **Cost/Tokens toggle** | Switch between viewing by cost ($) or total tokens |
-| **Hover tooltips** | Hover any cell to see date, cost, input/output tokens, and per-model breakdown |
+| **Hover tooltips** | Hover any cell to see date, cost, input/output tokens, and per-model breakdown. Empty days show "No token usage". |
 | **Model legend** | Dynamic legend shows each model's color swatch and name |
 | **Stats header** | Total tokens, total cost, active days, and average cost/day |
 
@@ -33,7 +33,7 @@ The matrix displays:
 
 The matrix reads from the same cross-session history used by `/token-history` and `/token-stats`. History is persisted to `~/.pi/agent/token-cost-history.json` so it survives across Pi sessions and reloads.
 
-If no history exists, the matrix will show an empty grid. Start using Pi with local models for a few turns, then run `/token-matrix` again.
+If there is no history in the requested range, the command reports this instead of opening a grid. Start using Pi with local models for a few turns, then run `/token-matrix` again.
 
 ## Technical Details
 
