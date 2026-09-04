@@ -1,5 +1,9 @@
 # Changelog
 
+### 2026-09-03 — 1.4.2: Remove redundant Cost/Tokens toggle
+
+**Change:** Dropped the Cost($)/Tokens toggle from the matrix. Each model's cost is estimated as a per-token OpenRouter price, so the cost and token views were effectively the same picture (16/17 of the tracked days rendered identically). Cell intensity is now always cost-based so the costly days stand out; both metrics remain visible in the per-cell tooltip and the header stats.
+
 ### 2026-09-03 — 1.4.1: Fix oversized matrix cells; add elongated mode for few weeks
 
 **Fix:** Matrix cells rendered as giant blocks when there were only a few weeks of data — the responsive `1fr` grid tracks stretched each cell to fill the full width, and an early fixed-size attempt looked too small.
