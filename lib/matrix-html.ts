@@ -87,7 +87,6 @@ function organizeIntoWeeks(
 
 /** Generate a complete, self-contained HTML document as a string. */
 export function generateMatrixHtml(data: DayData[], title: string): string {
-  const maxTokens = Math.max(...data.map((d) => d.totalTokens), 1);
   const maxCost = Math.max(...data.map((d) => d.costTotal), 0.00001);
 
   // Organize into weeks for the grid
@@ -134,8 +133,6 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
     --border: #30363d;
     --cell-bg: #161b22;
     --tooltip-bg: #1c2333;
-    --toggle-bg: #21262d;
-    --toggle-active: #3182ce;
     --level-0: #161b22;
     --level-1: #0d3472;
     --level-2: #0e4a9a;
@@ -211,34 +208,6 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
     flex-wrap: wrap;
     gap: 1rem;
     margin-bottom: 1.5rem;
-  }
-
-  .toggle-group {
-    display: flex;
-    background: var(--toggle-bg);
-    border-radius: 6px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-  }
-
-  .toggle-btn {
-    padding: 0.5rem 1rem;
-    font-size: 0.8125rem;
-    background: transparent;
-    color: var(--text-muted);
-    border: none;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    font-family: inherit;
-  }
-
-  .toggle-btn:hover {
-    color: var(--text);
-  }
-
-  .toggle-btn.active {
-    background: var(--toggle-active);
-    color: #fff;
   }
 
   .legend {
@@ -418,10 +387,6 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
       </div>
     </div>
     <div class="controls">
-      <div class="toggle-group">
-        <button class="toggle-btn active" data-mode="cost" onclick="setMode('cost')">Cost ($)</button>
-        <button class="toggle-btn" data-mode="tokens" onclick="setMode('tokens')">Tokens</button>
-      </div>
       <div class="legend" id="modelLegend">
         <!-- Populated by JS -->
       </div>
@@ -442,9 +407,7 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
 <script>
   const WEEKS = ${JSON.stringify(weeks)};
   const MODEL_LIST = ${JSON.stringify(modelList)};
-  const MAX_TOKENS = ${maxTokens};
   const MAX_COST = ${maxCost};
-  let currentMode = 'cost';
 
   /** Assign a distinct HSL color to each model. Golden-angle distribution for even hue spread. */
   function getModelColor(_modelId, index, _total) {
@@ -554,9 +517,9 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
         cell.className = 'cell';
 
         if (day) {
-          const value = currentMode === 'cost' ? day.costTotal : day.totalTokens;
-          const max = currentMode === 'cost' ? MAX_COST : MAX_TOKENS;
-          const level = getLevel(value, max);
+          // Intensity is always keyed to cost — the tool estimates each day's cost as if run
+          // on the OpenRouter API, so "which days were costly" is the useful signal.
+          const level = getLevel(day.costTotal, MAX_COST);
           cell.setAttribute('data-level', level);
           cell.setAttribute('data-date', day.date);
           cell.setAttribute('data-tokens', day.totalTokens);
@@ -567,6 +530,10 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
 
           // Apply gradient background based on model proportions (orientation depends on layout)
           cell.style.background = buildGradient(day, layout.orientation);
+
+          // Cost-based intensity: high-cost days render at full opacity, low-cost days fade out.
+          // The gradient above carries the model mix, while opacity carries the cost amount.
+          cell.style.opacity = (0.2 + 0.8 * (level / 5)).toFixed(2);
 
           cell.addEventListener('mouseenter', showTooltip);
           cell.addEventListener('mouseleave', hideTooltip);
@@ -630,14 +597,6 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
   function hideTooltip() {
     const tooltip = document.getElementById('tooltip');
     tooltip.classList.remove('visible');
-  }
-
-  function setMode(mode) {
-    currentMode = mode;
-    document.querySelectorAll('.toggle-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
-    });
-    buildMatrix();
   }
 
   function escapeHtml(str) {
