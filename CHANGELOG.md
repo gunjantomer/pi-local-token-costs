@@ -1,5 +1,13 @@
 # Changelog
 
+### 2026-09-03 — 1.4.1: Fix oversized matrix cells; add elongated mode for few weeks
+
+**Fix:** Matrix cells rendered as giant blocks when there were only a few weeks of data — the responsive `1fr` grid tracks stretched each cell to fill the full width, and an early fixed-size attempt looked too small.
+
+**Changes:**
+
+- `lib/matrix-html.ts` — cells are now sized from the measured container width. With many weeks they render as compact squares (12–24px) with model colors stacked vertically; with few weeks they render as elongated bars (up to 96px × 16px) with model colors laid out side by side. Layout is recalculated on window resize, and the container is capped at 1200px so the capped matrix is framed rather than stretched.
+
 ### 2026-09-03 — 1.4.0: Token usage contribution matrix, responsive layout, and cross-session file persistence
 
 **New feature:** `/token-matrix` command generates a GitHub-style contribution grid showing daily token usage and cost, viewable in your default browser.
