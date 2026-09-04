@@ -1,7 +1,8 @@
 /**
  * Generates a self-contained HTML contribution matrix (GitHub-style) for token usage data.
  * Blue color scheme with hover tooltips showing per-day cost and token details.
- * Supports toggle between cost and token views.
+ * A block is rendered for every day in the requested range; only days with
+ * token usage are colored (GitHub-contribution-matrix style).
  */
 
 export interface DayData {
@@ -42,9 +43,43 @@ function parseLocalDate(dateStr: string): Date {
   return new Date(y, m - 1, d, 0, 0, 0, 0);
 }
 
-/** Organize days into weeks (columns). Each week starts on Sunday. */
+/** Options controlling the rendered range of the matrix grid. */
+export interface MatrixOptions {
+  /** Number of weeks to render (default: 12). Ignored when `months` is set. */
+  weeks?: number;
+  /** Number of months (~30 days each) to render. Takes precedence over `weeks`. */
+  months?: number;
+  /** Inclusive end date (YYYY-MM-DD, local time). Defaults to today. */
+  endDate?: string;
+}
+
+/** A zeroed-out DayData for days with no token usage. */
+function emptyDay(d: Date): DayData {
+  return {
+    date: localDateStr(d),
+    dayOfWeek: d.getDay(),
+    dayOfMonth: d.getDate(),
+    month: d.getMonth(),
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    costTotal: 0,
+    byModel: {},
+  };
+}
+
+/**
+ * Organize days into weeks (columns). Each week starts on Sunday.
+ *
+ * The grid always spans the full requested range (ending `endDate`, default
+ * today) rather than just the first-to-last data date, so the matrix keeps a
+ * consistent size regardless of how sparsely the data covers the window.
+ * Days without data are zero-filled DayData entries; only days after the end
+ * date (future days in the last partial week) are null.
+ */
 function organizeIntoWeeks(
   data: DayData[],
+  options: MatrixOptions = {},
 ): { weekStart: string; days: (DayData | null)[] }[] {
   if (data.length === 0) return [];
 
@@ -53,57 +88,79 @@ function organizeIntoWeeks(
     dateMap.set(d.date, d);
   }
 
-  const firstDate = data[0].date;
-  const lastDate = data[data.length - 1].date;
+  const months = options.months ?? 0;
+  const weeks = months > 0 ? 0 : (options.weeks ?? 12);
 
-  // Find the Sunday before or on the first date (local time)
-  const start = parseLocalDate(firstDate);
+  // Inclusive end of the window (local midnight).
+  const end = options.endDate
+    ? parseLocalDate(options.endDate)
+    : new Date(
+        new Date().getFullYear(),
+        new Date().getMonth(),
+        new Date().getDate(),
+      );
+
+  // Start of the window, aligned back to the previous Sunday (local time)
+  const start = new Date(end);
+  start.setDate(start.getDate() - (months > 0 ? months * 30 : weeks * 7));
   while (start.getDay() !== 0) {
     start.setDate(start.getDate() - 1);
   }
 
-  const last = parseLocalDate(lastDate);
-
-  const weeks: { weekStart: string; days: (DayData | null)[] }[] = [];
+  const weeksOut: { weekStart: string; days: (DayData | null)[] }[] = [];
   const current = new Date(start);
 
-  while (current <= last) {
+  while (current <= end) {
     const weekDays: (DayData | null)[] = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(current);
       d.setDate(d.getDate() + i);
+      if (d > end) {
+        weekDays.push(null); // future day in the last partial week
+        continue;
+      }
       const key = localDateStr(d);
-      weekDays.push(dateMap.get(key) || null);
+      weekDays.push(dateMap.get(key) ?? emptyDay(d));
     }
-    weeks.push({
+    weeksOut.push({
       weekStart: localDateStr(current),
       days: weekDays,
     });
     current.setDate(current.getDate() + 7);
   }
 
-  return weeks;
+  return weeksOut;
 }
 
 /** Generate a complete, self-contained HTML document as a string. */
-export function generateMatrixHtml(data: DayData[], title: string): string {
-  const maxCost = Math.max(...data.map((d) => d.costTotal), 0.00001);
-
+export function generateMatrixHtml(
+  data: DayData[],
+  title: string,
+  options: MatrixOptions = {},
+): string {
   // Organize into weeks for the grid
-  const weeks = organizeIntoWeeks(data);
+  const weeks = organizeIntoWeeks(data, options);
+
+  // Days actually rendered in the grid that have usage (zero-filled days and
+  // out-of-window days are excluded so header stats match the picture).
+  const activeDays = weeks
+    .flatMap((w) => w.days)
+    .filter((d): d is DayData => d !== null && d.totalTokens > 0);
+
+  const maxCost = Math.max(...activeDays.map((d) => d.costTotal), 0.00001);
 
   // Collect unique model IDs for color assignment
   const modelList: string[] = [];
-  for (const d of data) {
+  for (const d of activeDays) {
     for (const m of Object.keys(d.byModel)) {
       if (!modelList.includes(m)) modelList.push(m);
     }
   }
 
   // Compute totals for the header
-  const totalTokens = data.reduce((s, d) => s + d.totalTokens, 0);
-  const totalCost = data.reduce((s, d) => s + d.costTotal, 0);
-  const totalDays = data.length;
+  const totalTokens = activeDays.reduce((s, d) => s + d.totalTokens, 0);
+  const totalCost = activeDays.reduce((s, d) => s + d.costTotal, 0);
+  const totalDays = activeDays.length;
 
   // Format numbers
   const fmtTokens = (n: number) => {
@@ -251,7 +308,7 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
     grid-template-rows: repeat(7, auto);
     gap: 2px;
     padding: 8px;
-    background: var(--bg-secondary);
+    background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 8px;
     width: max-content;
@@ -275,13 +332,15 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
     background: var(--level-0);
     cursor: pointer;
     position: relative;
-    transition: transform 0.1s ease;
+    transition: transform 0.1s ease, opacity 0.1s ease;
   }
 
   .cell:hover {
-    transform: scale(1.4);
+    transform: scale(1.25);
+    opacity: 1 !important;
     z-index: 10;
-    border: 1px solid rgba(255,255,255,0.2);
+    outline: 1.5px solid rgba(255, 255, 255, 0.75);
+    outline-offset: 1px;
   }
 
   .cell[data-level="0"] { background: var(--level-0); }
@@ -304,6 +363,7 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
     pointer-events: none;
     box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     min-width: 200px;
+    max-width: 340px;
   }
 
   .tooltip.visible {
@@ -339,14 +399,25 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
   }
 
   .tooltip-model {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
     font-size: 0.75rem;
     padding: 0.125rem 0;
     color: var(--text-muted);
   }
 
-  .tooltip-model span {
+  .tooltip-model-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    word-break: break-all;
+  }
+
+  .tooltip-model-count {
+    flex: 0 0 auto;
+    white-space: nowrap;
     color: var(--text);
-    float: right;
   }
 
   footer {
@@ -516,7 +587,21 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
         const cell = document.createElement('div');
         cell.className = 'cell';
 
-        if (day) {
+        if (!day) {
+          // Day falls after the end of the window (future days in the last
+          // partial week) — no block is rendered for it.
+          cell.setAttribute('data-level', 0);
+          cell.style.visibility = 'hidden';
+        } else if (day.totalTokens === 0) {
+          // Day in the window with no usage — render the empty level-0 block
+          // (like GitHub's contribution grid) with a minimal tooltip.
+          cell.setAttribute('data-level', 0);
+          cell.setAttribute('data-date', day.date);
+          cell.setAttribute('data-empty', 'true');
+          cell.addEventListener('mouseenter', showTooltip);
+          cell.addEventListener('mouseleave', hideTooltip);
+          cell.addEventListener('mousemove', moveTooltip);
+        } else {
           // Intensity is always keyed to cost — the tool estimates each day's cost as if run
           // on the OpenRouter API, so "which days were costly" is the useful signal.
           const level = getLevel(day.costTotal, MAX_COST);
@@ -538,9 +623,6 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
           cell.addEventListener('mouseenter', showTooltip);
           cell.addEventListener('mouseleave', hideTooltip);
           cell.addEventListener('mousemove', moveTooltip);
-        } else {
-          cell.setAttribute('data-level', 0);
-          cell.style.visibility = 'hidden';
         }
 
         matrix.appendChild(cell);
@@ -552,11 +634,6 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
     const tooltip = document.getElementById('tooltip');
     const cell = e.target;
     const date = cell.getAttribute('data-date');
-    const tokens = parseInt(cell.getAttribute('data-tokens'));
-    const input = parseInt(cell.getAttribute('data-input'));
-    const output = parseInt(cell.getAttribute('data-output'));
-    const cost = parseFloat(cell.getAttribute('data-cost'));
-    const models = JSON.parse(cell.getAttribute('data-models') || '{}');
 
     const dateObj = new Date(date + 'T00:00:00');
     const dateStr = dateObj.toLocaleDateString('en-US', {
@@ -565,6 +642,20 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
       month: 'long',
       day: 'numeric'
     });
+
+    if (cell.getAttribute('data-empty') === 'true') {
+      tooltip.innerHTML =
+        '<div class="tooltip-date">' + dateStr + '</div>' +
+        '<div class="tooltip-row"><span class="tooltip-label">Usage</span><span class="tooltip-value">No token usage</span></div>';
+      tooltip.classList.add('visible');
+      return;
+    }
+
+    const tokens = parseInt(cell.getAttribute('data-tokens'));
+    const input = parseInt(cell.getAttribute('data-input'));
+    const output = parseInt(cell.getAttribute('data-output'));
+    const cost = parseFloat(cell.getAttribute('data-cost'));
+    const models = JSON.parse(cell.getAttribute('data-models') || '{}');
 
     let html = '<div class="tooltip-date">' + dateStr + '</div>';
     html += '<div class="tooltip-row"><span class="tooltip-label">Cost</span><span class="tooltip-value">' + fmtCost(cost) + '</span></div>';
@@ -577,7 +668,7 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
       html += '<div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.25rem;">Models used:</div>';
       for (const [modelId, data] of Object.entries(models)) {
         const displayName = modelId.replace(/^[^/]+[/]/, '').replace(/[/]/g, '/');
-        html += '<div class="tooltip-model">' + escapeHtml(displayName) + ' <span>' + fmtTokens(data.inputTokens + data.outputTokens) + ' · ' + fmtCost(data.costTotal) + '</span></div>';
+        html += '<div class="tooltip-model"><span class="tooltip-model-name">' + escapeHtml(displayName) + '</span><span class="tooltip-model-count">' + fmtTokens(data.inputTokens + data.outputTokens) + ' · ' + fmtCost(data.costTotal) + '</span></div>';
       }
       html += '</div>';
     }
@@ -588,8 +679,22 @@ export function generateMatrixHtml(data: DayData[], title: string): string {
 
   function moveTooltip(e) {
     const tooltip = document.getElementById('tooltip');
-    const x = e.clientX + 12;
-    const y = e.clientY - 10;
+    const margin = 8;
+    const offset = 12;
+    const w = tooltip.offsetWidth;
+    const h = tooltip.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Prefer right of and slightly above the cursor; flip or clamp at any edge
+    // so the tooltip is never rendered off-screen.
+    let x = e.clientX + offset;
+    let y = e.clientY - 10;
+    if (x + w > vw - margin) x = e.clientX - w - offset; // flip to the left
+    x = Math.min(Math.max(x, margin), vw - margin - w); // final horizontal clamp
+    if (y + h > vh - margin) y = vh - margin - h; // flip above the cursor
+    y = Math.min(Math.max(y, margin), vh - margin - h); // final vertical clamp
+
     tooltip.style.left = x + 'px';
     tooltip.style.top = y + 'px';
   }
